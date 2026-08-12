@@ -9,7 +9,10 @@
  *
  * Events:
  *   "status" — { providerId: string, status: string, message: string }
- *     status values: starting, navigating, waiting, polling, complete, error, cancelled
+ *     status values: starting, navigating, waiting, polling, complete, error, cancelled, cdp
+  "cdp" fires once Chromium exposes its loopback DevTools endpoint
+  (ws://127.0.0.1:PORT/devtools/browser/...); remote clients reach it via the
+  authenticated server-side proxy route, never directly.
  */
 
 import { EventEmitter } from "events";
@@ -46,10 +49,82 @@ export function captureConfiguredHeaders(
   }
 }
 
+/**
+ * Parse the CDP loopback endpoint Chromium prints to stderr after launch:
+ *   "DevTools listening on ws://127.0.0.1:PORT/devtools/browser/<id>"
+ * Returns the port + ws URL, or null if the line does not match.
+ */
+export function parseCdpEndpointFromStderr(
+  text: string
+): { port: number; wsUrl: string } | null {
+  const m = text.match(
+    /DevTools listening on (ws:\/\/127\.0\.0\.1:(\d+)\/devtools\/browser\/\S+)/
+  );
+  if (!m) return null;
+  return { port: Number(m[2]), wsUrl: m[1] };
+}
+
 // ─── Service ────────────────────────────────────────────────────────────────
 
 export class InAppLoginService extends EventEmitter {
   private activeLogin: ActiveLogin | null = null;
+  private activeCdpEndpoints: Map<
+    string,
+    { port: number; wsUrl: string; startedAt: number }
+  > = new Map();
+
+  /**
+   * Capture the CDP (Chrome DevTools Protocol) loopback endpoint that Chromium
+   * prints to stderr after launch ("DevTools listening on ws://127.0.0.1:PORT/...").
+   * The endpoint is bound to 127.0.0.1 only; remote clients must reach it through
+   * the authenticated server-side proxy route, never directly.
+   */
+  private captureCdpEndpoint(
+    browser: import("playwright").Browser,
+    providerId: string
+  ): void {
+    const proc = (
+      browser as unknown as {
+        process(): import("child_process").ChildProcess | null;
+      }
+    ).process();
+    if (!proc || !proc.stderr) return;
+    const handler = (chunk: Buffer) => {
+      const parsed = parseCdpEndpointFromStderr(chunk.toString());
+      if (parsed) {
+        this.activeCdpEndpoints.set(providerId, {
+          ...parsed,
+          startedAt: Date.now(),
+        });
+        this.emit(
+          "status",
+          providerId,
+          "cdp",
+          `CDP loopback ready on 127.0.0.1:${parsed.port}`
+        );
+        proc.stderr?.removeListener("data", handler);
+      }
+    };
+    proc.stderr.on("data", handler);
+  }
+
+  /**
+   * Return the active CDP loopback endpoint for a provider, if a browser login
+   * is currently running with remote-debugging enabled. Used by the WS proxy
+   * route that bridges a remote dashboard client to the server-local CDP socket.
+   */
+  getCdpEndpoint(
+    providerId: string
+  ): { port: number; wsUrl: string; startedAt: number } | undefined {
+    return this.activeCdpEndpoints.get(providerId);
+  }
+
+  /**
+   * Remove a provider's CDP endpoint (e.g. after login completes or browser closes).
+   */
+  clearCdpEndpoint(providerId: string): void {
+    this.activeCdpEndpoints.delete(providerId);
+  }
 
   /**
    * Start a login flow for a web-cookie provider using Playwright.
@@ -128,8 +203,15 @@ export class InAppLoginService extends EventEmitter {
     // Launch browser
     this.emit("status", { providerId, status: "starting", message: "Launching browser..." });
     const browser = await playwright.chromium.launch({
-      headless: false, // User must interact with the login page
+      headless: false, // User must interact login page
+      args: [
+        "--remote-debugging-address=127.0.0.1",
+        "--remote-debugging-port=0", // auto-assign a free loopback port
+      ],
     });
+
+    // Capture CDP loopback endpoint (ws://127.0.0.1:PORT/devtools/browser/...) from Chromium stderr
+    this.captureCdpEndpoint(browser, providerId);
 
     try {
       const context = await browser.newContext({
@@ -272,6 +354,7 @@ export class InAppLoginService extends EventEmitter {
       return { success: false, error: `Login failed: ${message}` };
     } finally {
       await browser.close().catch(() => {});
+    this.clearCdpEndpoint(providerId);
     }
   }
 
