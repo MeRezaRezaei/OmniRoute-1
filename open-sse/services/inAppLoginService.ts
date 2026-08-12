@@ -21,6 +21,8 @@ import {
   TokenExtractionConfig,
   type TokenSource,
 } from "./tokenExtractionConfig";
+import { isFeatureFlagEnabled } from "@/shared/utils/featureFlags";
+import { launchCdpBrowser } from "./chromeProfiles";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -202,7 +204,7 @@ export class InAppLoginService extends EventEmitter {
 
     // Launch browser
     this.emit("status", { providerId, status: "starting", message: "Launching browser..." });
-    const browser = await playwright.chromium.launch({
+    const browser = await launchLoginBrowser(playwright.chromium, {
       headless: false, // User must interact login page
       args: [
         "--remote-debugging-address=127.0.0.1",
@@ -397,3 +399,22 @@ function sleep(ms: number): Promise<void> {
 // ─── Singleton ──────────────────────────────────────────────────────────────
 
 export const inAppLoginService = new InAppLoginService();
+
+
+//─── Flag-gated web-login browser launch ─────────────────────────────────────
+
+/**
+ * Launch the browser used for web-provider login.
+ * When the WEB_LOGIN_FORCE_CDP feature flag is enabled, launch the user's real
+ * Chrome in CDP mode (chromeProfiles.launchCdpBrowser); otherwise fall back to the
+ * bundled Playwright launch (default behaviour).
+ */
+async function launchLoginBrowser(
+  playwrightChromium: import("playwright").Chromium,
+  launchOptions: import("playwright").LaunchOptions,
+): Promise<import("playwright").Browser> {
+  if (isFeatureFlagEnabled("WEB_LOGIN_FORCE_CDP")) {
+    return launchCdpBrowser();
+  }
+  return playwrightChromium.launch(launchOptions);
+}

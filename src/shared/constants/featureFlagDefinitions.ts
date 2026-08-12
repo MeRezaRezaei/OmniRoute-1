@@ -565,4 +565,15 @@ export const FEATURE_FLAG_DEFINITIONS: FeatureFlagDefinition[] = [
     requiresRestart: false,
     warningLevel: "caution",
   },
+  {
+    key: "WEB_LOGIN_FORCE_CDP",
+    label: "Force CDP Web Login",
+    description: "Launch the user's real Chrome in DevTools CDP mode for web-provider login instead of the bundled Playwright browser. Exposes a loopback CDP endpoint (server-side, auth-required). Default off.",
+    descriptionI18nKey: "featureFlagWebLoginForceCdpDescription",
+    category: "runtime",
+    defaultValue: "false",
+    type: "boolean",
+    requiresRestart: false,
+    warningLevel: "caution",
+  },
 ];
