@@ -163,6 +163,8 @@ const executors = {
   huggingchat: new HuggingChatExecutor(),
   hc: new HuggingChatExecutor(), // Alias
   "yuanbao-web": new YuanbaoWebExecutor(),
+  "tencent-aistudio-web": TencentAIStudioWebExecutor,
+  tasw: TencentAIStudioWebExecutor,
   ybw: new YuanbaoWebExecutor(), // Alias
   "poe-web": new PoeWebExecutor(),
   // #8969: do NOT alias canonical `poe` (API-key / api.poe.com) to PoeWebExecutor.

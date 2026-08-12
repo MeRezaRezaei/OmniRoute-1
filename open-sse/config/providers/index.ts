@@ -259,7 +259,6 @@ import { chatOripeProvider } from "./registry/chat-oripe/index.ts";
 import { freeinferenceProvider } from "./registry/freeinference/index.ts";
 import { freeAiProvider } from "./registry/free-ai/index.ts";
 
-
 export const REGISTRY: Record<string, RegistryEntry> = {
   aimlapi: aimlapiProvider,
   "ollama-cloud": ollama_cloudProvider,
@@ -419,6 +418,7 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   zai: zaiProvider,
   huggingchat: huggingchatProvider,
   "yuanbao-web": yuanbao_webProvider,
+  "tencent-aistudio-web": tencent_aistudio_webProvider,
   galadriel: galadrielProvider,
   qianfan: qianfanProvider,
   "meta-llama": meta_llamaProvider,
@@ -519,5 +519,4 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   "chat-oripe": chatOripeProvider,
   freeinference: freeinferenceProvider,
   "free-ai": freeAiProvider,
-
 };
