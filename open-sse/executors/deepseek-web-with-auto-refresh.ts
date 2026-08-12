@@ -98,7 +98,7 @@ export class DeepSeekWebWithAutoRefreshExecutor extends DeepSeekWebExecutor {
       this.sessionValid = false;
       throw new Error("No userToken available for session refresh");
     }
-    const { maxRefreshRetries } = this.refreshConfig;
+    const maxRefreshRetries = this.refreshConfig.maxRefreshRetries;
     for (let attempt = 0; attempt < maxRefreshRetries; attempt++) {
       try {
         tokenCache.delete(this.currentUserToken);
