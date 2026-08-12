@@ -24,6 +24,10 @@ import {
 import { isFeatureFlagEnabled } from "@/shared/utils/featureFlags";
 import { launchCdpBrowser } from "./chromeProfiles";
 
+// Active-login profile/flag context (set per startLogin call)
+let _activeLoginProfileDir: string | undefined;
+let _activeLoginForceCdp = false;
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface LoginResult {
@@ -133,7 +137,7 @@ export class InAppLoginService extends EventEmitter {
    * @param providerId - e.g. "claude-web", "chatgpt-web"
    * @param options.timeout - Total timeout in ms (default: config value or 300s)
    */
-  async startLogin(providerId: string, options?: { timeout?: number }): Promise<LoginResult> {
+  async startLogin(providerId: string, options?: { timeout?: number; profileDir?: string; forceCdp?: boolean }): Promise<LoginResult> {
     const config = TOKEN_EXTRACTION_CONFIGS.get(providerId);
     if (!config) {
       this.emit("status", { providerId, status: "error", message: "No extraction config found" });
@@ -204,7 +208,9 @@ export class InAppLoginService extends EventEmitter {
 
     // Launch browser
     this.emit("status", { providerId, status: "starting", message: "Launching browser..." });
-    const browser = await launchLoginBrowser(playwright.chromium, {
+      _activeLoginProfileDir = options?.profileDir;
+  _activeLoginForceCdp = options?.forceCdp ?? false;
+const browser = await launchLoginBrowser(playwright.chromium, {
       headless: false, // User must interact login page
       args: [
         "--remote-debugging-address=127.0.0.1",
@@ -331,7 +337,13 @@ export class InAppLoginService extends EventEmitter {
         const allFound = requiredKeys.every((k) => credentials[k] !== undefined);
 
         if (allFound && Object.keys(credentials).length > 0) {
-          return { success: true, credentials };
+            try {
+    const __ctx = page.context();
+    const __cookies = await __ctx.cookies().catch(() => [] as any[]);
+    if (__cookies.length) credentials.cookies = JSON.stringify(__cookies);
+  } catch { /* ignore cookie capture */ }
+  if (_activeLoginProfileDir) credentials.profileDir = _activeLoginProfileDir;
+  return { success: true, credentials };
         }
 
         // Check for success URL pattern
@@ -339,7 +351,13 @@ export class InAppLoginService extends EventEmitter {
           try {
             const currentUrl = page.url();
             if (config.successUrlPattern.test(currentUrl) && Object.keys(credentials).length > 0) {
-              return { success: true, credentials };
+                try {
+    const __ctx = page.context();
+    const __cookies = await __ctx.cookies().catch(() => [] as any[]);
+    if (__cookies.length) credentials.cookies = JSON.stringify(__cookies);
+  } catch { /* ignore cookie capture */ }
+  if (_activeLoginProfileDir) credentials.profileDir = _activeLoginProfileDir;
+  return { success: true, credentials };
             }
           } catch {
             // URL access may fail on some pages
@@ -413,8 +431,8 @@ async function launchLoginBrowser(
   playwrightChromium: import("playwright").Chromium,
   launchOptions: import("playwright").LaunchOptions,
 ): Promise<import("playwright").Browser> {
-  if (isFeatureFlagEnabled("WEB_LOGIN_FORCE_CDP")) {
-    return launchCdpBrowser();
+  if (isFeatureFlagEnabled("WEB_LOGIN_FORCE_CDP") || _activeLoginForceCdp) {
+    return launchCdpBrowser({ profileDir: _activeLoginProfileDir });
   }
   return playwrightChromium.launch(launchOptions);
 }

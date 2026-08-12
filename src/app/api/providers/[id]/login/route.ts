@@ -115,10 +115,12 @@ function adobeFireflySuccessResponse(data: {
  */
 async function loginAdobeFirefly(
   connectionId: string,
-  body: { timeout?: unknown; freshSession?: unknown }
+  body: { timeout?: unknown; freshSession?: unknown; profileDir?: unknown; forceCdp?: unknown }
 ): Promise<NextResponse> {
   const timeout = typeof body.timeout === "number" ? body.timeout : undefined;
   const freshSession = typeof body.freshSession === "boolean" ? body.freshSession : true;
+  const profileDir = typeof body.profileDir === "string" ? body.profileDir : undefined;
+  const forceCdp = typeof body.forceCdp === "boolean" ? body.forceCdp : undefined;
 
   // Pure system-browser CDP is the packaged-safe implementation. Do not open a second browser
   // after failure: it creates ambiguous success/error races and the packaged runtime has no
@@ -237,7 +239,7 @@ export async function POST(
     const { inAppLoginService } = await import("@omniroute/open-sse/services/inAppLoginService.ts");
 
     const result = await inAppLoginService.startLogin(providerSlug || id, {
-      timeout: typeof body.timeout === "number" ? body.timeout : undefined,
+      timeout: typeof body.timeout === "number" ? body.timeout : undefined, profileDir, forceCdp,
     });
 
     // Persist credentials if extraction succeeded
