@@ -1,1 +1,2 @@
 {"timestamp":"2026-08-12T00:00:00Z","type":"initialization","summary":"Project brain initialized on branch brain-dev"}
+{"timestamp":"2026-08-12T09:35:00Z","type":"architecture","summary":"Tencent AI Studio (aistudio.tencent.ai) web cookie provider specs planned: handles hy3-g & Hunyuan models via cookie header auth."}
