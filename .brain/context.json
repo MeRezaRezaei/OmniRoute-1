@@ -2,7 +2,7 @@
   "projectName": "OmniRoute",
   "activeBranch": "brain-dev",
   "initializedAt": "2026-08-12",
-  "focus": "tasw provider PR #10174 opened upstream (release/v3.8.50, base-red #9985). Next: 3D generation API surface design.",
-  "status": "awaiting_upstream_review",
-  "privateNotes": ".brain/ is private equity; never pushed to fork/PR. Live server uses global package, not this source."
+  "focus": "From-source build of brain-dev running locally on port 20133 (isolated DATA_DIR). Fixed deepseek-web auto-refresh retry loop (#5da800d82). tasw provider PR #10174 open against release/v3.8.50 (base-red #9985). Investigated web-provider login model: in-app browser login only for TOKEN_EXTRACTION_CONFIGS providers (deepseek-web yes, kimi-web/hy3 no); manual cookie paste is the reliable method for all web providers. Server currently STOPPED (hit 600s pty timeout on 2026-08-12).",
+  "status": "build_works_server_stopped",
+  "privateNotes": ".brain/ is private equity, never pushed. Global live on 20128 (v3.8.49, root-managed) is separate and not our build. hy3 is NOT a registered provider. 'mrmroy' = store-learnings request (user)."
 }
