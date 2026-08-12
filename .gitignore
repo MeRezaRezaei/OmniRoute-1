@@ -10,10 +10,10 @@ _ideia/
 _mono_repo/
 _references/
 _tasks/
-.agents/**
-.claude/**
-.gemini/**
-.opencode/**
+.agents/
+.claude/
+.gemini/
+.opencode/
 .config/**
 .data/**
 .logs/**
