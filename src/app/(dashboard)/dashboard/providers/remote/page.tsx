@@ -1,170 +1,211 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-// Self-contained dashboard section: lets a remote installer start a provider
-// web login on this server and reach the loopback CDP endpoint from a distance.
-//
-// How the pieces fit together (the "most reliable" web-login methods):
-//   1. In-app login: POST /api/providers/[id]/login launches a real browser on
-//      THIS server with --remote-debugging on 127.0.0.1. The CDP ws URL is
-//      captured and exposed only via the authenticated GET /api/providers/[id]/cdp
-//      (loopback-private; never exposed publicly). A remote operator tunnels it
-//      home with SSH and drives the login in their own browser.
-//   2. Manual cookie (most reliable when the browser login is flaky): log into
-//      the provider site in YOUR browser, copy the session cookie (e.g. DeepSeek
-//      = `user-token`), and paste it into the provider connection's API Key
-//      field. This bypasses the browser entirely.
-//
-// Only providers with a token-extraction config get an in-app browser tab
-// (claude-web, chatgpt-web, gemini-web, grok-web, perplexity-web, deepseek-web,
-// qwen-web). Others (e.g. kimi-web) must use the manual-cookie method.
+type ChromeProfile = {
+  dir: string;
+  name: string;
+  email?: string;
+  userDataDir: string;
+};
 
 const KNOWN_WEB_PROVIDERS = [
   "deepseek-web",
   "kimi-web",
-  "qwen-web",
+  "tasw",
   "claude-web",
   "chatgpt-web",
   "gemini-web",
   "grok-web",
   "perplexity-web",
+  "qwen-web",
 ];
 
 export default function RemoteWebLoginPage() {
   const [providerId, setProviderId] = useState("deepseek-web");
-  const [status, setStatus] = useState<string>("idle");
-  const [endpoint, setEndpoint] = useState<{ port: number; wsUrl: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("");
+  const [wsUrl, setWsUrl] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<ChromeProfile[]>([]);
+  const [selectedProfile, setSelectedProfile] = useState<string>("");
+  const [forceCdp, setForceCdp] = useState<boolean>(false);
+  const [busy, setBusy] = useState<boolean>(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPolling = useCallback(() => {
+  const stopPoll = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
   }, []);
 
-  useEffect(() => stopPolling, [stopPolling]);
-
-  const pollCdp = useCallback(async () => {
+  const loadProfiles = useCallback(async () => {
     try {
-      const res = await fetch(`/api/providers/${encodeURIComponent(providerId)}/cdp`, {
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (data?.endpoint?.wsUrl) {
-        setEndpoint({ port: data.endpoint.port, wsUrl: data.endpoint.wsUrl });
-        setStatus("ready");
-        stopPolling();
+      const res = await fetch("/api/providers/cdp-profiles");
+      if (!res.ok) {
+        setStatus(`profiles: ${res.status}`);
+        return;
       }
+      const data = (await res.json()) as { profiles?: ChromeProfile[] };
+      setProfiles(data.profiles ?? []);
     } catch {
-      /* keep polling */
+      setStatus("profiles: fetch failed");
     }
-  }, [providerId, stopPolling]);
+  }, []);
+
+  useEffect(() => {
+    loadProfiles();
+    return stopPoll;
+  }, [loadProfiles, stopPoll]);
 
   const startLogin = useCallback(async () => {
-    setError(null);
-    setEndpoint(null);
-    setStatus("starting");
+    setBusy(true);
+    setWsUrl(null);
+    setStatus("starting web login...");
     try {
-      const res = await fetch(`/api/providers/${encodeURIComponent(providerId)}/login`, {
+      const res = await fetch(`/api/providers/${providerId}/login`, {
         method: "POST",
-        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          profileDir: selectedProfile || undefined,
+          forceCdp: forceCdp || undefined,
+        }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message || `Login failed (${res.status})`);
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setStatus(`login failed: ${JSON.stringify(data?.error ?? data)}`);
+        setBusy(false);
+        return;
       }
-      setStatus("waiting-cdp");
-      pollRef.current = setInterval(pollCdp, 1000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setStatus("idle");
+      setStatus("login complete — polling CDP endpoint");
+      pollRef.current = setInterval(async () => {
+        try {
+          const cdp = await fetch(`/api/providers/${providerId}/cdp`);
+          const cdpData = await cdp.json();
+          if (cdpData?.endpoint?.wsUrl) {
+            setWsUrl(cdpData.endpoint.wsUrl);
+            setStatus("CDP endpoint ready");
+            stopPoll();
+          }
+        } catch {
+          /* keep polling */
+        }
+      }, 1000);
+    } catch (e) {
+      setStatus(`error: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
     }
-  }, [providerId, pollCdp]);
-
-  const copy = useCallback(async () => {
-    if (endpoint?.wsUrl) {
-      try {
-        await navigator.clipboard.writeText(endpoint.wsUrl);
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [endpoint]);
+  }, [providerId, selectedProfile, forceCdp, stopPoll]);
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-2 text-xl font-semibold">Remote Web Login</h1>
-      <p className="mb-4 text-sm text-gray-500">
-        Start a provider web login on this server and reach its loopback Chrome
-        DevTools Protocol (CDP) endpoint from a remote machine.
+    <div style={{ padding: 24, maxWidth: 820 }}>
+      <h1>Remote Web Login</h1>
+      <p>
+        Start a web-provider login on this server and reach its loopback CDP
+        endpoint from anywhere via an authenticated tunnel.
       </p>
 
-      <div className="mb-4 flex gap-2">
+      <label style={{ display: "block", marginTop: 16 }}>
+        Provider
         <input
-          className="flex-1 rounded border px-3 py-2 text-sm"
+          list="web-providers"
           value={providerId}
-          onChange={(e) => setProviderId(e.target.value.trim())}
-          placeholder="provider id (e.g. deepseek-web)"
+          onChange={(e) => setProviderId(e.target.value)}
+          style={{ marginLeft: 8, padding: 6, width: 280 }}
         />
-        <button
-          className="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-          onClick={startLogin}
-          disabled={status === "starting" || status === "waiting-cdp"}
-        >
-          Start web login
+        <datalist id="web-providers">
+          {KNOWN_WEB_PROVIDERS.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
+      </label>
+
+      <fieldset style={{ marginTop: 16 }}>
+        <legend>Chrome profile</legend>
+        <button type="button" onClick={loadProfiles}>
+          Refresh profiles
         </button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {KNOWN_WEB_PROVIDERS.map((p) => (
-          <button
-            key={p}
-            className="rounded border px-2 py-1 text-xs text-gray-400 hover:text-gray-200"
-            onClick={() => setProviderId(p)}
+        {profiles.length === 0 && (
+          <div style={{ opacity: 0.7, marginTop: 8 }}>
+            No Chrome profiles found (Chrome not installed or not on this host).
+          </div>
+        )}
+        {profiles.map((p) => (
+          <label
+            key={p.dir}
+            style={{ display: "block", marginTop: 6, cursor: "pointer" }}
           >
-            {p}
-          </button>
+            <input
+              type="radio"
+              name="profile"
+              checked={selectedProfile === p.dir}
+              onChange={() => setSelectedProfile(p.dir)}
+            />{" "}
+            <strong>{p.name}</strong>
+            {p.email ? ` (${p.email})` : ""} — <code>{p.dir}</code>
+          </label>
         ))}
+        <label style={{ display: "block", marginTop: 8 }}>
+          <input
+            type="checkbox"
+            checked={forceCdp}
+            onChange={(e) => setForceCdp(e.target.checked)}
+          />{" "}
+          Force CDP launch (use this server&apos;s real Chrome even if the global
+          flag is off)
+        </label>
+      </fieldset>
+
+      <button
+        type="button"
+        onClick={startLogin}
+        disabled={busy}
+        style={{ marginTop: 16, padding: "8px 16px" }}
+      >
+        {busy ? "Working..." : "Start web login"}
+      </button>
+
+      <div style={{ marginTop: 16 }}>
+        <strong>Status:</strong> {status}
       </div>
 
-      {status === "waiting-cdp" && (
-        <p className="mb-2 text-sm text-amber-400">
-          Browser launched — waiting for the CDP endpoint to appear…
-        </p>
-      )}
-      {error && <p className="mb-2 text-sm text-red-400">Error: {error}</p>}
-
-      {endpoint && (
-        <div className="mb-4 rounded border border-green-700 bg-green-950 p-3">
-          <p className="mb-1 text-sm font-medium text-green-300">CDP endpoint ready (loopback)</p>
-          <p className="break-all text-xs text-green-200">{endpoint.wsUrl}</p>
-          <button
-            className="mt-2 rounded bg-green-700 px-3 py-1 text-xs text-white"
-            onClick={copy}
-          >
-            Copy wsUrl
-          </button>
-          <p className="mt-3 text-xs text-green-200">
-            From your remote machine, tunnel it home:
-            <br />
-            <code className="block whitespace-pre bg-black/40 p-2">
-              {`ssh -N -L ${endpoint.port}:127.0.0.1:${endpoint.port} user@this-host`}
-            </code>
-            then open the copied wsUrl in your local Chrome DevTools / CDP client.
-          </p>
+      {wsUrl && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 12,
+            background: "#0b1020",
+            borderRadius: 8,
+          }}
+        >
+          <div>
+            <strong>CDP wsUrl:</strong>
+          </div>
+          <code style={{ wordBreak: "break-all" }}>{wsUrl}</code>
+          <div style={{ marginTop: 8 }}>
+            <strong>Tunnel home (run on this host):</strong>
+          </div>
+          <code>
+            ssh -N -R 0:127.0.0.1:
+            {wsUrl.match(/:(\d+)\//)?.[1] ?? "PORT"} user@this-host
+          </code>
         </div>
       )}
 
-      <div className="mt-6 rounded border p-3 text-xs text-gray-400">
-        <p className="mb-1 font-medium text-gray-300">Most reliable method (no browser needed)</p>
-        If the in-app login is unreliable, log into the provider site in your own
-        browser, copy the session cookie (DeepSeek = <code>user-token</code>), and
-        paste it into the provider connection&apos;s <strong>API Key</strong> field.
-        OmniRoute web providers use <code>authType: apikey</code> / bearer, so the
-        cookie value is what they expect.
+      <div
+        style={{
+          marginTop: 24,
+          padding: 12,
+          border: "1px solid #444",
+          borderRadius: 8,
+        }}
+      >
+        <strong>Most reliable method (manual cookie):</strong> log into the
+        provider site in your own browser, copy the session cookie (DeepSeek ={" "}
+        <code>user-token</code>; Kimi / Tencent = their auth cookie), and paste
+        it into the provider connection&apos;s <em>API Key</em> field (the
+        connection is <code>authType: apikey</code>, <code>bearer</code>). This
+        works without any browser automation.
       </div>
     </div>
   );
