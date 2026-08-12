@@ -76,6 +76,7 @@ import { g4f_pollinationsProvider } from "./registry/g4f-pollinations/index.ts";
 import { g4f_ollamaProvider } from "./registry/g4f-ollama/index.ts";
 import { g4f_nvidiaProvider } from "./registry/g4f-nvidia/index.ts";
 import { tencentProvider } from "./registry/tencent/index.ts";
+import { tencent_aistudio_webProvider } from "./registry/tencent-aistudio-web/index.ts";
 import { cozeProvider } from "./registry/coze/index.ts";
 import { ai21Provider } from "./registry/ai21/index.ts";
 import { publicaiProvider } from "./registry/publicai/index.ts";
@@ -153,7 +154,7 @@ import { gitlab_duoProvider } from "./registry/gitlab-duo/index.ts";
 import { command_codeProvider } from "./registry/command-code/index.ts";
 import { novitaProvider } from "./registry/novita/index.ts";
 import { regoloProvider } from "./registry/regolo/index.ts";
-import { windsurfProvider } from "./registry/windsurf/index.ts";
+import { devin_desktopProvider } from "./registry/devin-desktop/index.ts";
 import { zed_hostedProvider } from "./registry/zed-hosted/index.ts";
 import { nanogptProvider } from "./registry/nanogpt/index.ts";
 import { scalewayProvider } from "./registry/scaleway/index.ts";
@@ -410,7 +411,7 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   "command-code": command_codeProvider,
   novita: novitaProvider,
   regolo: regoloProvider,
-  windsurf: windsurfProvider,
+  "devin-desktop": devin_desktopProvider,
   "zed-hosted": zed_hostedProvider,
   nanogpt: nanogptProvider,
   scaleway: scalewayProvider,

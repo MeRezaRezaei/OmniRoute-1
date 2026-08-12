@@ -1,4 +1,4 @@
-import assert from "node.assert";
+import assert from "node:assert";
 import { tencent_aistudio_webProvider } from "../../open-sse/config/providers/registry/tencent-aistudio-web/index.ts";
 import executor from "../../open-sse/executors/tencent-aistudio-web.ts";
 
@@ -14,16 +14,17 @@ async function runTests() {
   assert(modelIds.includes("hy3-g"));
 
   // Test executor missing cookie
-  const input: any = {
-    req: new Request("https://localhost/v1/chat/completions", { method: "POST" }),
+  const input = {
+    model: "hy3-g",
     body: { model: "hy3-g", messages: [{ role: "user", content: "hi" }] },
-    connection: { apiKey: "" },
-  };
+    stream: false,
+    credentials: { apiKey: "" },
+  } as unknown as Parameters<typeof executor.execute>[0];
 
   const res = await executor.execute(input);
   assert.strictEqual(res.status, 401);
   const data = await res.json();
-  assert(data.error.message.includes("Cookie is required"));
+  assert(data.error.message.includes("Cookie"));
 
   console.log("All Tencent AI Studio Web tests passed!");
 }

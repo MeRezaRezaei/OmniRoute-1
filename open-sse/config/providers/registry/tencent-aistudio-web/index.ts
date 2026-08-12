@@ -11,7 +11,7 @@ export const tencent_aistudio_webProvider: RegistryEntry = {
   models: [
     {
       id: "hy3-g",
-      name: "Hunyuan3D / HY3-G (via Tencent AI Studio)",
+      name: "HY3-G (via Tencent AI Studio)",
       toolCalling: false,
     },
     {

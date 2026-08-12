@@ -2,6 +2,7 @@
   "projectName": "OmniRoute",
   "activeBranch": "brain-dev",
   "initializedAt": "2026-08-12",
-  "focus": "Completed tencent-aistudio-web provider setup; next step: 3D generation API surface design",
-  "status": "in_progress"
+  "focus": "tasw provider PR #10174 opened upstream (release/v3.8.50, base-red #9985). Next: 3D generation API surface design.",
+  "status": "awaiting_upstream_review",
+  "privateNotes": ".brain/ is private equity; never pushed to fork/PR. Live server uses global package, not this source."
 }
