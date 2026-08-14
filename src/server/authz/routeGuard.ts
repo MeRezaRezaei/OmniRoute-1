@@ -104,6 +104,7 @@ export const LOCAL_ONLY_API_PATTERNS: ReadonlyArray<RegExp> = [
   /^\/api\/providers\/cdp-profiles\/?$/,
   /^\/api\/providers\/login-sessions\/?$/,
   /^\/api\/providers\/cdp-profile-scan\/?$/,
+  /^\/api\/providers\/cdp-bind\/?$/,
 ];
 
 // `SPAWN_CAPABLE_PREFIXES` / `SPAWN_CAPABLE_PATTERNS` (the spawn-capable

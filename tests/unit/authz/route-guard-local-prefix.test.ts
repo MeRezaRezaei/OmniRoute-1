@@ -47,6 +47,8 @@ test("isLocalOnlyPath: CDP chrome-control routes are local-only", () => {
   assert.equal(isLocalOnlyPath("/api/providers/claude-web/cdp"), true);
   assert.equal(isLocalOnlyPath("/api/providers/cdp-profiles"), true);
   assert.equal(isLocalOnlyPath("/api/providers/login-sessions"), true);
+  assert.equal(isLocalOnlyPath("/api/providers/cdp-profile-scan"), true);
+  assert.equal(isLocalOnlyPath("/api/providers/cdp-bind"), true);
 });
 
 test("isLocalOnlyPath: generic /api/providers/ CRUD stays remote-reachable", () => {

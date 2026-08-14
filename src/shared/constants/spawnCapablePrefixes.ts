@@ -54,6 +54,7 @@ export const SPAWN_CAPABLE_PATTERNS: ReadonlyArray<RegExp> = [
   /^\/api\/providers\/cdp-profiles\/?$/, // CDP chrome-control: enumerates local Chrome profiles + their account emails (local-machine introspection)
   /^\/api\/providers\/login-sessions\/?$/, // CDP chrome-control: runtime login-session registry; can close tabs/Chrome (Hard Rules #15 + #17)
   /^\/api\/providers\/cdp-profile-scan\/?$/, // CDP chrome-control: attaches/launches real Chrome + reads profile cookies (Hard Rules #15 + #17)
+  /^\/api\/providers\/cdp-bind\/?$/, // CDP chrome-control: persists chosen profile mapping for execution binding (Hard Rules #15 + #17)
   /^\/api\/providers\/cursor\/agent-availability\/?$/, // static path (no dynamic segment), but kept in this array alongside its /api/providers/ siblings rather than the flat SPAWN_CAPABLE_PREFIXES array — spawns cursor-agent status via checkCursorAgentAvailability()/getCachedCursorAgentAvailability() (Hard Rules #15 + #17)
 ];
 

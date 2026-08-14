@@ -9,6 +9,23 @@ type ChromeProfile = {
   userDataDir: string;
 };
 
+type CdpProviderMatch = {
+  providerId: string;
+  displayName: string;
+  requiredCookies: string[];
+  foundCookies: string[];
+  available: boolean;
+};
+
+type CdpProfileScanResult = {
+  profileDir: string;
+  userDataDir: string;
+  providers: CdpProviderMatch[];
+  matchedProviderIds: string[];
+  scannedAt: string;
+  error?: string;
+};
+
 const KNOWN_WEB_PROVIDERS = [
   "deepseek-web",
   "kimi-web",
@@ -28,6 +45,10 @@ export default function RemoteWebLoginPage() {
   const [profiles, setProfiles] = useState<ChromeProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<string>("");
   const [forceCdp, setForceCdp] = useState<boolean>(false);
+  const [bindEnabled, setBindEnabled] = useState<boolean>(false);
+  const [scanResults, setScanResults] = useState<CdpProfileScanResult[]>([]);
+  const [scanning, setScanning] = useState<boolean>(false);
+  const [bindings, setBindings] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<boolean>(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -57,16 +78,72 @@ export default function RemoteWebLoginPage() {
     return stopPoll;
   }, [loadProfiles, stopPoll]);
 
+  const scanProfiles = useCallback(async () => {
+    setScanning(true);
+    setStatus("scanning profiles for provider cookies...");
+    try {
+      const res = await fetch("/api/providers/cdp-profile-scan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setStatus(`scan failed: ${JSON.stringify(data?.error ?? data)}`);
+        return;
+      }
+      setScanResults(data.results ?? []);
+      const nextBindings: Record<string, string> = {};
+      for (const r of data.results ?? []) {
+        for (const m of r.providers ?? []) {
+          if (m.available && !nextBindings[m.providerId]) {
+            nextBindings[m.providerId] = r.profileDir;
+          }
+        }
+      }
+      setBindings((prev) => ({ ...nextBindings, ...prev }));
+      setStatus(`scan complete: ${(data.results ?? []).length} profiles`);
+    } catch (e) {
+      setStatus(`scan error: ${(e as Error).message}`);
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  const bindProfile = useCallback(async (provider: string, profileDir: string) => {
+    try {
+      const res = await fetch("/api/providers/cdp-bind", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ providerId: provider, profileDir }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setStatus(`bind failed: ${JSON.stringify(data?.error ?? data)}`);
+        return;
+      }
+      setBindings((prev) => ({ ...prev, [provider]: profileDir }));
+      setStatus(`bound ${provider} → ${profileDir}`);
+    } catch (e) {
+      setStatus(`bind error: ${(e as Error).message}`);
+    }
+  }, []);
+
   const startLogin = useCallback(async () => {
     setBusy(true);
     setWsUrl(null);
-    setStatus("starting web login...");
+    const profileDir = selectedProfile || bindings[providerId] || undefined;
+    setStatus(
+      profileDir
+        ? `starting web login on profile ${profileDir}...`
+        : "starting web login..."
+    );
     try {
       const res = await fetch(`/api/providers/${providerId}/login`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          profileDir: selectedProfile || undefined,
+          profileDir,
           forceCdp: forceCdp || undefined,
         }),
       });
@@ -95,10 +172,10 @@ export default function RemoteWebLoginPage() {
     } finally {
       setBusy(false);
     }
-  }, [providerId, selectedProfile, forceCdp, stopPoll]);
+  }, [providerId, selectedProfile, bindings, forceCdp, stopPoll]);
 
   return (
-    <div style={{ padding: 24, maxWidth: 820 }}>
+    <div style={{ padding: 24, maxWidth: 920 }}>
       <h1>Remote Web Login</h1>
       <p>
         Start a web-provider login on this server and reach its loopback CDP
@@ -118,6 +195,11 @@ export default function RemoteWebLoginPage() {
             <option key={p} value={p} />
           ))}
         </datalist>
+        {bindings[providerId] && (
+          <span style={{ marginLeft: 12, opacity: 0.8 }}>
+            bound to <code>{bindings[providerId]}</code>
+          </span>
+        )}
       </label>
 
       <fieldset style={{ marginTop: 16 }}>
@@ -164,6 +246,96 @@ export default function RemoteWebLoginPage() {
       >
         {busy ? "Working..." : "Start web login"}
       </button>
+
+      <fieldset style={{ marginTop: 24 }}>
+        <legend>Profile → provider matrix</legend>
+        <p style={{ opacity: 0.8, marginTop: 0 }}>
+          Scan each Chrome profile to see which web-provider session cookies it
+          already holds, then bind providers to a profile. Requests for a bound
+          provider are routed through that profile&apos;s Chrome (execution
+          binding) so the provider sees genuine browser traffic.
+        </p>
+        <button type="button" onClick={scanProfiles} disabled={scanning}>
+          {scanning ? "Scanning..." : "Scan profiles"}
+        </button>
+        {scanResults.length > 0 && (
+          <table
+            style={{
+              marginTop: 12,
+              borderCollapse: "collapse",
+              fontSize: 13,
+            }}
+          >
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", padding: "4px 10px" }}>Profile</th>
+                <th style={{ textAlign: "left", padding: "4px 10px" }}>Provider</th>
+                <th style={{ textAlign: "left", padding: "4px 10px" }}>Cookies</th>
+                <th style={{ textAlign: "left", padding: "4px 10px" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scanResults.map((r) =>
+                r.error ? (
+                  <tr key={r.profileDir}>
+                    <td style={{ padding: "4px 10px" }}>
+                      <code>{r.profileDir}</code>
+                    </td>
+                    <td colSpan={3} style={{ padding: "4px 10px", opacity: 0.7 }}>
+                      error: {r.error}
+                    </td>
+                  </tr>
+                ) : (
+                  r.providers.map((m) => (
+                    <tr key={`${r.profileDir}:${m.providerId}`}>
+                      <td style={{ padding: "4px 10px" }}>
+                        <code>{r.profileDir}</code>
+                      </td>
+                      <td style={{ padding: "4px 10px" }}>
+                        {m.displayName} <code>({m.providerId})</code>
+                      </td>
+                      <td style={{ padding: "4px 10px" }}>
+                        {m.available ? (
+                          <span style={{ color: "#4caf50" }}>
+                            ✓ ready ({m.foundCookies.join(", ")})
+                          </span>
+                        ) : (
+                          <span style={{ opacity: 0.6 }}>
+                            missing: {m.requiredCookies.join(", ")}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: "4px 10px" }}>
+                        {bindings[m.providerId] === r.profileDir ? (
+                          <strong style={{ color: "#4caf50" }}>bound</strong>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => bindProfile(m.providerId, r.profileDir)}
+                            disabled={!m.available}
+                          >
+                            Bind
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )
+              )}
+            </tbody>
+          </table>
+        )}
+        <label style={{ display: "block", marginTop: 12 }}>
+          <input
+            type="checkbox"
+            checked={bindEnabled}
+            onChange={(e) => setBindEnabled(e.target.checked)}
+          />{" "}
+          Bind web-provider execution to CDP Chrome (WEB_PROVIDER_CDP_BIND —
+          route bound providers&apos; upstream requests through the user&apos;s
+          real Chrome)
+        </label>
+      </fieldset>
 
       <div style={{ marginTop: 16 }}>
         <strong>Status:</strong> {status}
