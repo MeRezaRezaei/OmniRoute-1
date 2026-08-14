@@ -109,3 +109,13 @@ to the CDP Chrome:
 
 ## Progress log
 - 2026-08-14: research gaps A/B/D/E/F; wrote this plan; found 3 pre-existing compile errors. Next: Pillar 1.
+- 2026-08-14: Pillar 1 (cdpController persistent attach/launch/copy/reconnect + default-context) committed in 25b882ff8.
+- 2026-08-14: Pillar 2 login-default-context fixed — cdpLoginOrchestrator opens tab in default context,
+  verifies in a separate tab, and keeps the CDP Chrome alive. login route uses orchestrator when
+  profileDir/forceCdp set; 3 pre-existing compile errors fixed. Committed in eec6406bc.
+- 2026-08-14: Pillar 5 routes + security — /login, /cdp, /cdp-profiles, /login-sessions all LOCAL_ONLY
+  (routeGuard + spawnCapablePrefixes), loopback enforcement before auth (Hard Rules #15/#17). Committed.
+- 2026-08-14: Pillar 6 tests — cdpLoginOrchestrator registry + route-guard local-only classification tests.
+- REMAINING: Pillar 3 execution binding (cdpFetchExecutor, Option A in-page fetch + exposeFunction SSE
+  bridge, WEB_PROVIDER_CDP_BIND flag default off). Pillar 4 dashboard profile→provider matrix UI.
+- REMAINING: openapi.yaml / docs update for the new login-sessions + cdp-profiles endpoints.
