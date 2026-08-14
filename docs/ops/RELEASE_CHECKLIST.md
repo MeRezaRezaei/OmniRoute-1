@@ -266,6 +266,7 @@ Deploy skills use the light rsync flow — no `npm pack`, no `npm i -g`:
   - Run a `/v1/chat/completions` request against a known provider
   - Verify `/api/monitoring/health` returns `CLOSED` circuit breakers
   - Confirm MCP transports respond (`/mcp` HTTP, `/mcp-sse` SSE)
+  - CDP chrome-control (if changed): `POST /api/providers/cdp-profile-scan {"all":true}` returns 200 with a `results` array and no error; `GET /api/providers/cdp-profiles` returns the profile list; a profile→provider row shows `available:true` for a profile already logged into a web provider.
 
 ### Post-release
 

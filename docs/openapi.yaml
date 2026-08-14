@@ -1812,6 +1812,115 @@ paths:
         "404":
           description: No local agy login found
 
+  /api/providers/cdp-profiles:
+    get:
+      tags: [Providers]
+      summary: List Chrome profiles available for CDP-controlled web-login
+      description: >-
+        LOCAL_ONLY (loopback). Returns the operator's real Chrome profiles
+        (dir, name, account email when readable) so the dashboard can pick which
+        profile opens the login tab. Requires management auth.
+      responses:
+        "200":
+          description: Chrome profile list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        dir: { type: string }
+                        name: { type: string }
+                        email: { type: string, nullable: true }
+                        userDataDir: { type: string }
+
+  /api/providers/cdp-profile-scan:
+    post:
+      tags: [Providers]
+      summary: Scan Chrome profiles for which web-provider session cookies they hold
+      description: >-
+        LOCAL_ONLY (loopback). Attaches to or launches the operator's real Chrome
+        (via CDP) and reports, per provider, which required session cookies each
+        profile currently holds. Powers the dashboard profile-to-provider
+        availability matrix. Requires management auth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profileDir: { type: string }
+                userDataDir: { type: string }
+                all: { type: boolean, description: "Scan all profiles when true" }
+                keepAlive: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Scan result(s)
+        "400":
+          description: Missing profileDir when all=false
+
+  /api/providers/cdp-bind:
+    post:
+      tags: [Providers]
+      summary: Bind a Chrome profile to a web provider (CDP execution binding)
+      description: >-
+        LOCAL_ONLY (loopback). Persists the chosen profile (providerSpecificData.
+        cdpProfileDir) so login and, when WEB_PROVIDER_CDP_BIND is enabled,
+        upstream execution reuse that Chrome profile. Requires management auth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                providerId: { type: string }
+                profileDir: { type: string }
+                unbind: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Binding persisted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  providerId: { type: string }
+                  cdpProfileDir: { type: string, nullable: true }
+
+  /api/providers/login-sessions:
+    get:
+      tags: [Providers]
+      summary: List active CDP login sessions (request-id tracked)
+      description: LOCAL_ONLY (loopback). Requires management auth.
+      responses:
+        "200":
+          description: Active login sessions
+    delete:
+      tags: [Providers]
+      summary: Close a CDP login session (optionally its Chrome)
+      description: LOCAL_ONLY (loopback). Requires management auth.
+      parameters:
+        - in: query
+          name: requestId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: closeChrome
+          required: false
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Session closed
+        "400":
+          description: Missing requestId
+
   /api/provider-nodes:
     get:
       tags: [Provider Nodes]
