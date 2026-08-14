@@ -576,4 +576,15 @@ export const FEATURE_FLAG_DEFINITIONS: FeatureFlagDefinition[] = [
     requiresRestart: false,
     warningLevel: "caution",
   },
+  {
+    key: "WEB_PROVIDER_CDP_BIND",
+    label: "Bind Web Providers to CDP Chrome",
+    description: "Route web-provider upstream requests through the user's real Chrome (in-page fetch via CDP) so providers see genuine browser traffic. Loopback-only; opt-in, default off.",
+    descriptionI18nKey: "featureFlagWebProviderCdpBindDescription",
+    category: "runtime",
+    defaultValue: "false",
+    type: "boolean",
+    requiresRestart: false,
+    warningLevel: "caution",
+  },
 ];

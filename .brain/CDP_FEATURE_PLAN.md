@@ -119,3 +119,8 @@ to the CDP Chrome:
 - REMAINING: Pillar 3 execution binding (cdpFetchExecutor, Option A in-page fetch + exposeFunction SSE
   bridge, WEB_PROVIDER_CDP_BIND flag default off). Pillar 4 dashboard profile→provider matrix UI.
 - REMAINING: openapi.yaml / docs update for the new login-sessions + cdp-profiles endpoints.
+## Progress log
+- 2026-08-14 — Pillar 1+2 done (cdpController.ts persistent controller; inAppLoginService default-context profile-persistent login; fixed 3 compile errors + literal REDACTED placeholder in login route).
+- 2026-08-14 — Gap A runtime orchestration done (cdpLoginOrchestrator.ts: requestId↔tab registry, in-page hook injection, verify-in-separate-tab, selective cleanup keeping CDP Chrome alive). Local-only routes: /api/providers/login-sessions (GET/DELETE). Route guards: 4 CDP regexes in LOCAL_ONLY_API_PATTERNS + 3 in SPAWN_CAPABLE_PATTERNS.
+- 2026-08-14 — Pillar 3 (execution binding) DONE: open-sse/services/cdpFetchExecutor.ts (cdpFetch whole-body + cdpFetchStream SSE via exposeFunction→Node Readable bridge; composes cdpController default-context; opt-in via WEB_PROVIDER_CDP_BIND flag default off; errors via sanitizeErrorMessage). Tests: tests/unit/cdpFetchExecutor.test.ts (4 gating/reject cases). tsc clean; lint clean.
+- REMAINING: Pillar 4 dashboard profile→provider matrix UI + mapping persistence; openapi/docs; VPS live test of attach+launch+in-page fetch.
