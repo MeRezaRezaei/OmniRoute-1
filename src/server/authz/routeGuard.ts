@@ -91,6 +91,18 @@ export const LOCAL_ONLY_API_PREFIXES: ReadonlyArray<string> = [
 export const LOCAL_ONLY_API_PATTERNS: ReadonlyArray<RegExp> = [
   /^\/api\/providers\/[^/]+\/refresh-cursor\/?$/,
   /^\/api\/providers\/[^/]+\/chatgpt-web-codex-doctor\/?$/,
+  // CDP chrome-control surface (Hard Rules #15 + #17): launching/attaching to the
+  // operator's real Chrome + reading its profiles/cookies is a local-machine
+  // operation. Loopback enforcement happens before any auth check so a leaked JWT
+  // via tunnel cannot drive the user's browser. Covers:
+  //   /api/providers/[id]/login          (spawns/attaches Chrome)
+  //   /api/providers/[id]/cdp            (read/clear CDP loopback endpoint)
+  //   /api/providers/cdp-profiles        (enumerate local Chrome profiles)
+  //   /api/providers/login-sessions      (runtime login session registry)
+  /^\/api\/providers\/[^/]+\/login\/?$/,
+  /^\/api\/providers\/[^/]+\/cdp\/?$/,
+  /^\/api\/providers\/cdp-profiles\/?$/,
+  /^\/api\/providers\/login-sessions\/?$/,
 ];
 
 // `SPAWN_CAPABLE_PREFIXES` / `SPAWN_CAPABLE_PATTERNS` (the spawn-capable

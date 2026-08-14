@@ -177,8 +177,13 @@ export async function POST(
     freshSession?: unknown;
     profileDir?: unknown;
     forceCdp?: unknown;
+    requestId?: unknown;
+    verify?: unknown;
   };
   const providerSlug = resolveProviderSlug(provider as Record<string, unknown>);
+
+  const profileDir = typeof body.profileDir === "string" ? body.profileDir : undefined;
+  const forceCdp = typeof body.forceCdp === "boolean" ? body.forceCdp : undefined;
 
   // Adobe Firefly: dedicated JWT capture (never cookies/localStorage alone).
   if (isAdobeFireflyProvider(provider as { provider?: unknown }, providerSlug)) {
@@ -239,6 +244,61 @@ export async function POST(
     // Bug: the previous code passed `id` (connection UUID), so the lookup always
     // missed and returned "No extraction config" without launching a browser.
     const { inAppLoginService } = await import("@omniroute/open-sse/services/inAppLoginService.ts");
+
+    // CDP (real-Chrome) path: use the runtime orchestrator so the login is
+    // tracked by requestId, hook-injected, verified in a separate tab, and the
+    // CDP Chrome stays alive for execution binding. Falls back to the generic
+    // in-app service when no profile/CDP intent is requested.
+    if (profileDir || forceCdp) {
+      const { cdpLoginOrchestrator } = await import(
+        "@omniroute/open-sse/services/cdpLoginOrchestrator.ts"
+      );
+      const { TOKEN_EXTRACTION_CONFIGS } = await import(
+        "@omniroute/open-sse/services/tokenExtractionConfig.ts"
+      );
+      const config = TOKEN_EXTRACTION_CONFIGS.get(providerSlug || id);
+      const requestId =
+        typeof body.requestId === "string" && body.requestId.trim()
+          ? body.requestId.trim()
+          : `${providerSlug || id}:${Date.now()}`;
+
+      if (config) {
+        const result = await cdpLoginOrchestrator.startLogin({
+          requestId,
+          providerId: providerSlug || id,
+          config,
+          profileDir,
+          timeoutMs: typeof body.timeout === "number" ? body.timeout : undefined,
+          verify: body.verify !== false,
+        });
+if (result.success && result.credentials) {
+          try {
+            const credentialsStr = JSON.stringify(result.credentials);
+            await updateProviderConnection(id, {
+              apiKey: credentialsStr,
+              providerSpecificData: result.credentials,
+            });
+          } catch (err) {
+            const msg = sanitizeErrorMessage(err instanceof Error ? err.message : err);
+            return NextResponse.json(
+              { success: false, error: `Extracted but failed to persist: ${msg}` },
+              { status: 500 }
+            );
+          }
+        }
+        return NextResponse.json(
+          {
+            success: result.success,
+            sessionId: result.sessionId,
+            verified: result.verified,
+            credentials: result.credentials,
+            persisted: result.success,
+            error: result.error,
+          },
+          { status: result.success ? 200 : 400 }
+        );
+      }
+    }
 
     const result = await inAppLoginService.startLogin(providerSlug || id, {
       timeout: typeof body.timeout === "number" ? body.timeout : undefined,

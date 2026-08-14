@@ -37,6 +37,27 @@ test("isLocalOnlyPath: /api/oauth/cursor/auto-import is local-only (spawns child
   assert.equal(isLocalOnlyPath("/api/oauth/cursor/auto-import"), true);
 });
 
+// ─── CDP chrome-control surface is local-only (Hard Rules #15/#17) ─────────
+
+test("isLocalOnlyPath: CDP chrome-control routes are local-only", () => {
+  // Launching/attaching to the operator's real Chrome + reading its profiles or
+  // cookies is a local-machine operation. Loopback enforcement happens before any
+  // auth check so a leaked JWT via tunnel cannot drive the user's browser.
+  assert.equal(isLocalOnlyPath("/api/providers/claude-web/login"), true);
+  assert.equal(isLocalOnlyPath("/api/providers/claude-web/cdp"), true);
+  assert.equal(isLocalOnlyPath("/api/providers/cdp-profiles"), true);
+  assert.equal(isLocalOnlyPath("/api/providers/login-sessions"), true);
+});
+
+test("isLocalOnlyPath: generic /api/providers/ CRUD stays remote-reachable", () => {
+  // Only the CDP/login sub-paths are loopback-locked; the rest of the provider CRUD
+  // surface (list/add/update) remains reachable remotely. A flat /api/providers/
+  // prefix would wrongly lock the whole subtree.
+  assert.equal(isLocalOnlyPath("/api/providers"), false);
+  assert.equal(isLocalOnlyPath("/api/providers/claude-web"), false);
+  assert.equal(isLocalOnlyPath("/api/providers/claude-web/models"), false);
+});
+
 test("isLocalOnlyPath: the rest of /api/oauth/ stays remote-reachable (no over-broadening)", () => {
   // Only the spawn-capable auto-import path is loopback-locked. The rest of the OAuth
   // surface (browser redirect / callback flows) MUST remain reachable remotely — a
