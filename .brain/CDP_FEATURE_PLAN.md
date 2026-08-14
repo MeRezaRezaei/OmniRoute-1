@@ -126,3 +126,16 @@ to the CDP Chrome:
 - 2026-08-14 — Pillar 4 DONE: open-sse/services/cdpProfileScan.ts (scanProfile/scanAllProfiles read each profile's cookies vs listExtractionConfigs cookie tokenSources → per-provider availability); POST /api/providers/cdp-profile-scan (local-only); POST /api/providers/cdp-bind (persists providerSpecificData.cdpProfileDir); dashboard remote page now has profile→provider availability matrix + Bind buttons + WEB_PROVIDER_CDP_BIND toggle + scan button. Tests: route-guard-local-prefix extended (cdp-profile-scan + cdp-bind local-only). tsc clean; 7/7 pass.
 - 2026-08-14 — Docs DONE: openapi.yaml gained cdp-profiles (GET), cdp-profile-scan (POST), cdp-bind (POST), login-sessions (GET/DELETE); RELEASE_CHECKLIST smoke section gained CDP scan/profiles availability checks. openapi.yaml valid YAML.
 - REMAINING: VPS live test of attach+launch+in-page fetch (Hard Rule #18); final .brain learnings + commit. CDP feature INCOMPLETE → stays PRIVATE; only tasw/hy3 commits public-safe.
+
+---
+## Progress log (final)
+
+### 2026-08-14 — CDP chrome-control feature COMPLETE (Pillars 1-4 + tests + docs)
+- **Pillar 1** : persistent reconnectable CDP controller (attach to debuggable Chrome or launch with  + user profile; default context = profile-persistent ).
+- **Pillar 2** login in user's own profile:  uses the profile default context (cookies persist to disk) + keeps CDP Chrome alive after login.
+- **Pillar 3** : execution binding via in-page  (real browser TLS/fingerprint/IP);  (JSON) +  (SSE, exposeFunction bridge); gated by  (default off).
+- **Pillar 4**  + dashboard matrix +  endpoint persisting .
+- Orchestrator : requestId↔tab registry + injected login hook + verify-in-separate-tab + selective cleanup.
+- Routes , , , , ,  all LOCAL_ONLY ( + spawnCapablePrefixes). Tests: cdpFetchExecutor(4) + cdpLoginOrchestrator(5) + route-guard(7) all pass; tsc clean (only pre-existing driverFactory.test.ts errors).
+- Docs: openapi.yaml (4 endpoints) + RELEASE_CHECKLIST smoke bullets.
+- **REMAINING (operator-run)**: live test of attach+launch+in-page fetch on Reza's machine (Hard Rule #18). CDP feature INCOMPLETE → stays PRIVATE; only tasw/hy3 commits public-safe.
