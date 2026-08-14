@@ -175,6 +175,8 @@ export async function POST(
   const body = (await req.json().catch(() => ({}))) as {
     timeout?: unknown;
     freshSession?: unknown;
+    profileDir?: unknown;
+    forceCdp?: unknown;
   };
   const providerSlug = resolveProviderSlug(provider as Record<string, unknown>);
 
@@ -239,7 +241,9 @@ export async function POST(
     const { inAppLoginService } = await import("@omniroute/open-sse/services/inAppLoginService.ts");
 
     const result = await inAppLoginService.startLogin(providerSlug || id, {
-      timeout: typeof body.timeout === "number" ? body.timeout : undefined, profileDir, forceCdp,
+      timeout: typeof body.timeout === "number" ? body.timeout : undefined,
+      profileDir: typeof body.profileDir === "string" ? body.profileDir : undefined,
+      forceCdp: typeof body.forceCdp === "boolean" ? body.forceCdp : undefined,
     });
 
     // Persist credentials if extraction succeeded

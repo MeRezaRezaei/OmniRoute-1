@@ -156,11 +156,7 @@ export async function launchCdpBrowser(opts?: {
     throw new Error("Chrome did not expose a CDP endpoint");
   }
   const { chromium } = await import("playwright");
-  const context = await chromium.connectOverCDP(wsUrl);
-  const browser = context.browser();
-  if (!browser) {
-    throw new Error("CDP connect returned no browser handle");
-  }
+  const browser = await chromium.connectOverCDP(wsUrl);
   return browser;
 }
 

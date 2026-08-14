@@ -161,7 +161,10 @@ export class InAppLoginService extends EventEmitter {
     });
 
     try {
-      const result = await this.runBrowserLogin(config, options?.timeout);
+      const result = await this.runBrowserLogin(config, options?.timeout, {
+        profileDir: options?.profileDir,
+        forceCdp: options?.forceCdp,
+      });
       this.emit("status", {
         providerId,
         status: result.success ? "complete" : "error",
@@ -184,7 +187,8 @@ export class InAppLoginService extends EventEmitter {
    */
   private async runBrowserLogin(
     config: TokenExtractionConfig,
-    timeout?: number
+    timeout?: number,
+    cdp?: { profileDir?: string; forceCdp?: boolean }
   ): Promise<LoginResult> {
     const pollInterval = config.pollingConfig.pollInterval || 1000;
     const maxTimeout = timeout || config.pollingConfig.timeout || 300_000;
@@ -208,9 +212,9 @@ export class InAppLoginService extends EventEmitter {
 
     // Launch browser
     this.emit("status", { providerId, status: "starting", message: "Launching browser..." });
-      _activeLoginProfileDir = options?.profileDir;
-  _activeLoginForceCdp = options?.forceCdp ?? false;
-const browser = await launchLoginBrowser(playwright.chromium, {
+      _activeLoginProfileDir = cdp?.profileDir;
+    _activeLoginForceCdp = cdp?.forceCdp ?? false;
+    const browser = await launchLoginBrowser(playwright.chromium, {
       headless: false, // User must interact login page
       args: [
         "--remote-debugging-address=127.0.0.1",
@@ -222,10 +226,13 @@ const browser = await launchLoginBrowser(playwright.chromium, {
     this.captureCdpEndpoint(browser, providerId);
 
     try {
-      const context = await browser.newContext({
-        viewport: { width: 1280, height: 800 },
-        locale: "en-US",
-      });
+      const cdpMode = (isFeatureFlagEnabled("WEB_LOGIN_FORCE_CDP") || _activeLoginForceCdp) && browser.contexts().length > 0;
+      const context = cdpMode
+        ? browser.contexts()[0]
+        : await browser.newContext({
+            viewport: { width: 1280, height: 800 },
+            locale: "en-US",
+          });
       const page = await context.newPage();
       const credentials: Record<string, string> = {};
 
@@ -373,7 +380,10 @@ const browser = await launchLoginBrowser(playwright.chromium, {
       this.emit("status", { providerId, status: "error", message });
       return { success: false, error: `Login failed: ${message}` };
     } finally {
-      await browser.close().catch(() => {});
+      const keepAlive =
+        (isFeatureFlagEnabled("WEB_LOGIN_FORCE_CDP") || _activeLoginForceCdp) &&
+        browser.contexts().length > 0;
+      if (!keepAlive) await browser.close().catch(() => {});
     this.clearCdpEndpoint(providerId);
     }
   }
@@ -428,7 +438,7 @@ export const inAppLoginService = new InAppLoginService();
  * bundled Playwright launch (default behaviour).
  */
 async function launchLoginBrowser(
-  playwrightChromium: import("playwright").Chromium,
+  playwrightChromium: import("playwright").BrowserType,
   launchOptions: import("playwright").LaunchOptions,
 ): Promise<import("playwright").Browser> {
   if (isFeatureFlagEnabled("WEB_LOGIN_FORCE_CDP") || _activeLoginForceCdp) {
