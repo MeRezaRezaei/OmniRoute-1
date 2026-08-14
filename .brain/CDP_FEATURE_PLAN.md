@@ -131,11 +131,11 @@ to the CDP Chrome:
 ## Progress log (final)
 
 ### 2026-08-14 — CDP chrome-control feature COMPLETE (Pillars 1-4 + tests + docs)
-- **Pillar 1** : persistent reconnectable CDP controller (attach to debuggable Chrome or launch with  + user profile; default context = profile-persistent ).
-- **Pillar 2** login in user's own profile:  uses the profile default context (cookies persist to disk) + keeps CDP Chrome alive after login.
-- **Pillar 3** : execution binding via in-page  (real browser TLS/fingerprint/IP);  (JSON) +  (SSE, exposeFunction bridge); gated by  (default off).
-- **Pillar 4**  + dashboard matrix +  endpoint persisting .
-- Orchestrator : requestId↔tab registry + injected login hook + verify-in-separate-tab + selective cleanup.
-- Routes , , , , ,  all LOCAL_ONLY ( + spawnCapablePrefixes). Tests: cdpFetchExecutor(4) + cdpLoginOrchestrator(5) + route-guard(7) all pass; tsc clean (only pre-existing driverFactory.test.ts errors).
+- **Pillar 1** `cdpController.ts`: persistent reconnectable CDP controller (attach to debuggable Chrome or launch with `--remote-debugging` + user profile; default context = profile-persistent `contexts()[0]`).
+- **Pillar 2** login in user's own profile: `inAppLoginService` uses the profile default context (cookies persist to disk) + keeps CDP Chrome alive after login.
+- **Pillar 3** `cdpFetchExecutor.ts`: execution binding via in-page `fetch` (real browser TLS/fingerprint/IP); `cdpFetch` (JSON) + `cdpFetchStream` (SSE, exposeFunction bridge); gated by `WEB_PROVIDER_CDP_BIND` (default off).
+- **Pillar 4** `cdpProfileScan.ts` + dashboard matrix + `cdp-bind` endpoint persisting `providerSpecificData.cdpProfileDir`.
+- Orchestrator `cdpLoginOrchestrator.ts`: requestId↔tab registry + injected login hook + verify-in-separate-tab + selective cleanup.
+- Routes `cdp-profiles`, `cdp-profile-scan`, `cdp-bind`, `login-sessions`, `/login`, `/cdp` all LOCAL_ONLY (`isLocalOnlyPath` + spawnCapablePrefixes). Tests: cdpFetchExecutor(4) + cdpLoginOrchestrator(5) + route-guard(7) all pass; tsc clean (only pre-existing driverFactory.test.ts errors).
 - Docs: openapi.yaml (4 endpoints) + RELEASE_CHECKLIST smoke bullets.
 - **REMAINING (operator-run)**: live test of attach+launch+in-page fetch on Reza's machine (Hard Rule #18). CDP feature INCOMPLETE → stays PRIVATE; only tasw/hy3 commits public-safe.
