@@ -34,11 +34,6 @@
       "count": 7
     }
   },
-  "open-sse/executors/puter.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "open-sse/executors/t3-chat-web.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 11
@@ -57,11 +52,6 @@
   "open-sse/executors/vertex.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    }
-  },
-  "open-sse/handlers/chatCore/codexFailover.ts": {
-    "no-restricted-imports": {
-      "count": 1
     }
   },
   "open-sse/handlers/chatCore/comboContextCache.ts": {
@@ -358,11 +348,6 @@
       "count": 1
     }
   },
-  "src/app/api/auth/login/route.ts": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/app/api/auth/oidc/callback/route.ts": {
     "no-restricted-imports": {
       "count": 1
@@ -404,11 +389,6 @@
     }
   },
   "src/app/api/cli/connect/route.ts": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/app/api/combos/[id]/route.ts": {
     "no-restricted-imports": {
       "count": 1
     }
@@ -828,14 +808,10 @@
       "count": 1
     }
   },
-  "src/app/api/settings/require-login/route.ts": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
+
   "src/app/api/settings/route.ts": {
     "no-restricted-imports": {
-      "count": 2
+      "count": 1
     }
   },
   "src/app/api/settings/system-prompt/route.ts": {
@@ -1033,11 +1009,6 @@
       "count": 1
     }
   },
-  "src/lib/api/modelTestRunner.ts": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/lib/api/proxyRegistryRouteHandlers.ts": {
     "no-restricted-imports": {
       "count": 1
@@ -1090,11 +1061,6 @@
   },
   "src/lib/db/tokenLimits.ts": {
     "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/embeddings/service.ts": {
-    "no-restricted-imports": {
       "count": 1
     }
   },
@@ -1501,11 +1467,6 @@
       "count": 1
     }
   },
-  "tests/integration/mimocode-proxy.integration.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 13
-    }
-  },
   "tests/integration/obsidian-plugin-e2e.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 12
@@ -1646,11 +1607,7 @@
       "count": 11
     }
   },
-  "tests/unit/auth-login-route.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
+
   "tests/unit/auth-ollama-cloud-per-model-403-3027.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 11
@@ -1709,11 +1666,6 @@
   "tests/unit/call-log-cap.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 43
-    }
-  },
-  "tests/unit/call-log-file-rotation.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
     }
   },
   "tests/unit/call-log-startup.test.ts": {
@@ -1788,7 +1740,7 @@
   },
   "tests/unit/chatcore-translation-paths.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 34
+      "count": 31
     }
   },
   "tests/unit/chatgpt-web-tools-5240.test.ts": {
@@ -1918,7 +1870,7 @@
   },
   "tests/unit/cli-oauth-commands.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 18
+      "count": 20
     }
   },
   "tests/unit/cli-oneproxy-commands.test.ts": {
@@ -2416,11 +2368,6 @@
       "count": 7
     }
   },
-  "tests/unit/executor-gitlab.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "tests/unit/executor-nlpcloud.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
@@ -2539,11 +2486,7 @@
       "count": 12
     }
   },
-  "tests/unit/login-bootstrap-route.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 10
-    }
-  },
+
   "tests/unit/management-password.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
@@ -2572,11 +2515,6 @@
   "tests/unit/memory-summarization.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    }
-  },
-  "tests/unit/mimocode-executor.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 58
     }
   },
   "tests/unit/minimax-tts-1043.test.ts": {
@@ -2962,11 +2900,6 @@
   "tests/unit/response-sanitizer.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 83
-    }
-  },
-  "tests/unit/responses-parse-once-4041.test.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 6
     }
   },
   "tests/unit/responses-translation-fixes.test.ts": {

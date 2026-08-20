@@ -11,6 +11,8 @@ import {
   findMissingArtifactPaths,
   findUnexpectedArtifactPaths,
   normalizeArtifactPath,
+  parseJsonArrayOutput,
+  parseJsonValuesOutput,
 } from "../../scripts/build/pack-artifact-policy.ts";
 
 test("normalizeArtifactPath normalizes slashes and leading relative markers", () => {
@@ -18,6 +20,39 @@ test("normalizeArtifactPath normalizes slashes and leading relative markers", ()
     normalizeArtifactPath("./app\\scripts\\ad-hoc\\test.js"),
     "app/scripts/ad-hoc/test.js"
   );
+});
+
+test("parseJsonArrayOutput extracts the first valid array from mixed command output", () => {
+  const output = [
+    "notice [not-json]",
+    '[{"path":"src/[literal].ts","files":[["nested"]]}]',
+    "notice [second-array]",
+  ].join("\n");
+  assert.deepEqual(parseJsonArrayOutput(output), [
+    { path: "src/[literal].ts", files: [["nested"]] },
+  ]);
+});
+
+test("parseJsonArrayOutput can skip valid arrays that are not the target payload", () => {
+  const output = `[]
+[{"filename":"omniroute.tgz","files":[{"path":"src/index.ts"}]}]`;
+  assert.deepEqual(
+    parseJsonArrayOutput(output, (candidate) =>
+      candidate.some(
+        (entry) =>
+          typeof entry === "object" &&
+          entry !== null &&
+          Array.isArray((entry as { files?: unknown }).files)
+      )
+    ),
+    [{ filename: "omniroute.tgz", files: [{ path: "src/index.ts" }] }]
+  );
+});
+
+test("parseJsonValuesOutput extracts object reports as well as arrays", () => {
+  assert.deepEqual(parseJsonValuesOutput('notice\n{"files":[{"path":"src/index.ts"}]}'), [
+    { files: [{ path: "src/index.ts" }] },
+  ]);
 });
 
 test("findUnexpectedArtifactPaths flags staged app files outside the allowlist", () => {
@@ -128,6 +163,12 @@ test("tls-options.mjs is allowed in staging dist/ (server-ws.mjs dependency, mis
   assert.deepEqual(unexpectedPaths, []);
 });
 
+test("call-log artifact worker is kept and required in packaged runtimes", () => {
+  const workerPath = "src/lib/usage/callLogArtifactWorker.js";
+  assert.ok(APP_STAGING_ALLOWED_EXACT_PATHS.includes(workerPath));
+  assert.ok(PACK_ARTIFACT_REQUIRED_PATHS.includes(`dist/${workerPath}`));
+});
+
 test("dist/tls-options.mjs is a required tarball path (regression guard for #5452)", () => {
   const missingPaths = findMissingArtifactPaths([], PACK_ARTIFACT_REQUIRED_PATHS);
   assert.ok(
@@ -166,6 +207,7 @@ test("findMissingArtifactPaths flags missing root runtime files in the tarball",
     "bin/cli/data-dir.mjs",
     "bin/cli/program.mjs",
     "bin/cli/utils/ensureAndroidCacheDir.mjs",
+    "bin/cli/utils/parseEnvValue.mjs",
     "bin/cli/utils/storageKeyProvision.mjs",
     "bin/cli/utils/versionFastPath.mjs",
     "bin/mcp-server.mjs",
@@ -180,12 +222,16 @@ test("findMissingArtifactPaths flags missing root runtime files in the tarball",
     "dist/peer-stamp.mjs",
     "dist/responses-ws-proxy.mjs",
     "dist/server-ws.mjs",
+    "dist/src/lib/usage/callLogArtifactWorker.js",
+    "dist/systemd-notify.mjs",
     "dist/tls-options.mjs",
     "dist/webdav-handler.mjs",
     "scripts/build/colocateOptionals.mjs",
     "scripts/build/fixTlsClientNodeBinary.mjs",
     "scripts/build/native-binary-compat.mjs",
     "scripts/build/runtime-env.mjs",
+    "scripts/packs/optionalPackInstaller.mjs",
+    "scripts/packs/optionalPackManifest.mjs",
     "src/shared/utils/nodeRuntimeSupport.ts",
   ]);
 });

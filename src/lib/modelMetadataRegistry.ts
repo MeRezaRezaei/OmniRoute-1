@@ -7,6 +7,8 @@ import {
   getResolvedModelContextOverride,
   isNonChatCatalogSurface,
 } from "@/lib/modelCapabilities";
+import { getModelCapabilityOverride } from "@/lib/db/modelCapabilityOverrides";
+import type { ModelCapabilityResolutionSnapshot } from "@/lib/modelCapabilityResolutionSnapshot";
 import {
   getAuthoritativeContextWindow,
   getAuthoritativeProviderContextWindow,
@@ -27,6 +29,7 @@ import {
   CANONICAL_EFFORT_VALUES,
   extendCodexGpt56EffortValues,
 } from "@/shared/reasoning/effortStandardization";
+import type { ModelCapabilityResolutionSnapshot } from "@/lib/modelCapabilityResolutionSnapshot";
 
 const MODEL_METADATA_SCHEMA_VERSION = "model-metadata-v1";
 
@@ -38,6 +41,11 @@ type JsonRecord = Record<string, unknown>;
 
 export interface CatalogEnrichmentSnapshot {
   modelsDevPricing: PricingByProvider | null;
+  capabilityResolution?: ModelCapabilityResolutionSnapshot;
+  providerNodeIdsByPrefix?: Readonly<Record<string, string>>;
+  /** #9147: build-local bulk load of synced capabilities + token/context overrides
+   * so per-entry enrichment never hits SQLite again (see catalogResponse.ts). */
+  capabilityResolutionSnapshot?: ModelCapabilityResolutionSnapshot | null;
 }
 
 interface CatalogDiagnosticsOptions {
@@ -58,6 +66,7 @@ export interface CanonicalModelMetadata {
     toolCalling: boolean;
     reasoning: boolean;
     supportsThinking: boolean | null;
+    supportedThinkingEfforts: readonly string[] | null;
     supportsTools: boolean | null;
     vision: boolean | null;
     attachment: boolean | null;
@@ -84,6 +93,7 @@ export interface CanonicalModelMetadata {
       providerRegistry: boolean;
       staticSpec: boolean;
       syncedCapability: boolean;
+      reasoningEffortsOverride: boolean;
     };
   };
   modalities: {
@@ -198,20 +208,27 @@ export function getCatalogDiagnosticsHeaders(
 export function getCanonicalModelMetadata(input: {
   provider?: string | null;
   model?: string | null;
+  snapshot?: ModelCapabilityResolutionSnapshot | null;
 }): CanonicalModelMetadata | null {
   const modelId = asNonEmptyString(input.model);
   if (!modelId) return null;
 
-  const resolved = getResolvedModelCapabilities({
-    provider: input.provider || null,
-    model: modelId,
-  });
+  const resolved = getResolvedModelCapabilities(
+    {
+      provider: input.provider || null,
+      model: modelId,
+    },
+    undefined,
+    input.snapshot || null
+  );
   const provider = resolved.provider;
   const providerAlias = provider ? PROVIDER_ID_TO_ALIAS[provider] || provider : null;
   const registryModel = getRegistryModel(providerAlias || provider, resolved.model || modelId);
   const staticSpec = getModelSpec(resolved.model || modelId);
   const syncedCapability =
-    provider && resolved.model ? getSyncedCapability(provider, resolved.model) : null;
+    provider && resolved.model
+      ? getSyncedCapability(provider, resolved.model, input.snapshot?.synced ?? null)
+      : null;
   const canonicalStaticAlias = resolveStaticModelAlias(resolved.model || modelId);
   const modalities = buildModalities(
     resolved.modalitiesInput,
@@ -236,6 +253,7 @@ export function getCanonicalModelMetadata(input: {
       toolCalling: resolved.toolCalling,
       reasoning: resolved.reasoning,
       supportsThinking: resolved.supportsThinking,
+      supportedThinkingEfforts: resolved.supportedThinkingEfforts,
       supportsTools: resolved.supportsTools,
       vision: resolved.supportsVision,
       attachment: resolved.attachment,
@@ -262,6 +280,7 @@ export function getCanonicalModelMetadata(input: {
         providerRegistry: Boolean(registryModel),
         staticSpec: Boolean(staticSpec),
         syncedCapability: Boolean(syncedCapability),
+        reasoningEffortsOverride: resolved.reasoningEffortsOverride,
       },
     },
     modalities: {
@@ -403,9 +422,11 @@ export function enrichCatalogModelEntry<T extends JsonRecord>(
   input?: { provider?: string | null; model?: string | null },
   snapshot?: CatalogEnrichmentSnapshot
 ): T {
-  const provider =
+  const publicProvider =
     input?.provider ||
     (typeof entry.owned_by === "string" && entry.owned_by !== "combo" ? entry.owned_by : null);
+  const provider =
+    (publicProvider && snapshot?.providerNodeIdsByPrefix?.[publicProvider]) || publicProvider;
   const model =
     input?.model ||
     asNonEmptyString(entry.root) ||
@@ -416,22 +437,27 @@ export function enrichCatalogModelEntry<T extends JsonRecord>(
       return id;
     })();
 
-  const metadata = getCanonicalModelMetadata({ provider, model });
+  const metadata = getCanonicalModelMetadata({
+    provider,
+    model,
+    snapshot: snapshot?.capabilityResolutionSnapshot ?? null,
+  });
   if (!metadata) return entry;
-  const registryModel = getRegistryModel(
-    metadata.providerAlias || metadata.provider,
-    metadata.model
-  );
 
   const nextEntry: JsonRecord = { ...entry };
   const existingName = asNonEmptyString(entry.name);
   const authoritativeContextWindow =
     getAuthoritativeProviderContextWindow(metadata.provider, metadata.model) ??
     getAuthoritativeProviderContextWindow(provider, model) ??
+    getAuthoritativeProviderContextWindow(publicProvider, model) ??
     getAuthoritativeContextWindow(metadata.model) ??
     getAuthoritativeContextWindow(model);
   const specialtySurface = isNonChatCatalogSurface(entry.type);
-  const persistedContextWindow = getResolvedModelContextOverride({ provider, model });
+  const capabilitySnapshot = snapshot?.capabilityResolutionSnapshot ?? null;
+  const persistedContextWindow = getResolvedModelContextOverride(
+    { provider, model },
+    capabilitySnapshot
+  );
   const capabilityFields = {
     ...(typeof metadata.capabilities.vision === "boolean"
       ? { vision: metadata.capabilities.vision }
@@ -460,9 +486,9 @@ export function enrichCatalogModelEntry<T extends JsonRecord>(
           ...(metadata.capabilities.supportsThinking
             ? {
                 effort_tiers:
-                  registryModel?.supportedThinkingEfforts &&
-                  registryModel.supportedThinkingEfforts.length > 0
-                    ? [...registryModel.supportedThinkingEfforts]
+                  metadata.capabilities.supportedThinkingEfforts &&
+                  metadata.capabilities.supportedThinkingEfforts.length > 0
+                    ? [...metadata.capabilities.supportedThinkingEfforts]
                     : extendCodexGpt56EffortValues(
                         metadata.provider,
                         metadata.model,
@@ -522,7 +548,23 @@ export function enrichCatalogModelEntry<T extends JsonRecord>(
     delete nextEntry.context_length;
   }
 
-  if (typeof metadata.limits.maxOutputTokens === "number" && metadata.limits.maxOutputTokens > 0) {
+  const persistedOutputLimit =
+    getModelCapabilityOverride(provider, model, "max_output_tokens", capabilitySnapshot?.maxTokenOverrides) ??
+    getModelCapabilityOverride(provider, model, "max_token", capabilitySnapshot?.maxTokenOverrides) ??
+    getModelCapabilityOverride(
+      publicProvider,
+      model,
+      "max_output_tokens",
+      capabilitySnapshot?.maxTokenOverrides
+    ) ??
+    getModelCapabilityOverride(publicProvider, model, "max_token", capabilitySnapshot?.maxTokenOverrides);
+  if (persistedOutputLimit !== null) {
+    nextEntry.max_output_tokens = persistedOutputLimit;
+  } else if (
+    typeof nextEntry.max_output_tokens !== "number" &&
+    typeof metadata.limits.maxOutputTokens === "number" &&
+    metadata.limits.maxOutputTokens > 0
+  ) {
     nextEntry.max_output_tokens = metadata.limits.maxOutputTokens;
   }
 

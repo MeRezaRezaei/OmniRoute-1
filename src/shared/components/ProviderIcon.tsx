@@ -185,7 +185,6 @@ const KNOWN_SVGS = new Set([
   "pollinations",
   "poolside",
   "publicai",
-  "puter",
   "qianfan",
   "qiniu",
   "qwen",
@@ -241,6 +240,7 @@ const KNOWN_SVGS = new Set([
 ]);
 
 const LOCAL_SVG_ALIASES: Record<string, string> = {
+  "cursor-api": "cursor",
   "qwen-cloud": "qwencloud",
   "qwen-cloud-token-plan": "qwencloud",
 };
