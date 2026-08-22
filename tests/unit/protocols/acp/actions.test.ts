@@ -4,12 +4,12 @@ import { executeAcpAction } from '../../../../open-sse/protocols/acp/actions.js'
 
 test('executeAcpAction delegates write correctly', async () => {
     let capturedText = '';
-    const page: any = {
+    const page = {
         locator: () => ({
             pressSequentially: async (text: string) => { capturedText = text; }
         })
     };
     
-    await executeAcpAction(page, { type: 'WRITE', target: '#in', payload: 'test' });
+    await executeAcpAction(page as unknown as import("playwright-core").Page, { type: 'WRITE', target: '#in', payload: 'test' });
     assert.strictEqual(capturedText, 'test');
 });

@@ -1,4 +1,4 @@
-export async function setupDomStreamObserver(page: any, selector: string) {
+export async function setupDomStreamObserver(page: import("playwright-core").Page, selector: string) {
     // Inject a MutationObserver into the page that watches the target stream element.
     // Instead of querying via Playwright repeatedly (which is loud and slow), 
     // the page itself pushes updates back out to Node natively as they render.
@@ -17,11 +17,11 @@ export async function setupDomStreamObserver(page: any, selector: string) {
             if (currentText.length > lastLength) {
                 const diff = currentText.substring(lastLength);
                 lastLength = currentText.length;
-                (window as any).onStreamOutput(diff);
+                (window as unknown as { onStreamOutput: (o: string) => void, __streamObserver: unknown }).onStreamOutput(diff);
             }
         });
 
         observer.observe(target, { childList: true, subtree: true, characterData: true });
-        (window as any).__streamObserver = observer;
+        (window as unknown as { onStreamOutput: (o: string) => void, __streamObserver: unknown }).__streamObserver = observer;
     }, { selector });
 }

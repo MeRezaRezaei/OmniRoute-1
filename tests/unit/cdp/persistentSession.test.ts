@@ -4,8 +4,8 @@ import { launchNativeProfile } from '../../../open-sse/services/cdp/persistentSe
 
 test('launchNativeProfile ignores automation flags', async () => {
     let capturedArgs: string[] = [];
-    const mockChromium: any = {
-        launchPersistentContext: async (dir: string, options: any) => {
+    const mockChromium: unknown = {
+        launchPersistentContext: async (dir: string, options: Record<string, unknown>) => {
             capturedArgs = options.ignoreDefaultArgs || [];
             return {
                 pages: () => [{

@@ -6,11 +6,11 @@ test('setupDomStreamObserver pushes evaluation function to page', async () => {
     let evaluateCalledWith: string | null = null;
     let exposedFunctionName: string | null = null;
     
-    const page: any = {
-        exposeFunction: async (name: string, fn: any) => {
+    const page: import("playwright-core").Page = {
+        exposeFunction: async (name: string, fn: unknown) => {
             exposedFunctionName = name;
         },
-        evaluate: async (fn: any, args: any) => { 
+        evaluate: async (fn: unknown, args: unknown) => { 
             evaluateCalledWith = typeof fn;
             return true;
         }
