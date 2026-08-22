@@ -1,8 +1,0 @@
-{
-  "projectName": "OmniRoute",
-  "activeBranch": "brain-dev",
-  "initializedAt": "2026-08-12",
-  "focus": "CDP chrome-control feature COMPLETE on private branch feat/cdp-remote-login (Pillars 1-4 + tests + docs; final commit c60a0afcf). OmniRoute controls user's real Chrome via CDP: persistent controller (cdpController.ts), login in own profile (cookies persist), execution binding via in-page fetch (cdpFetchExecutor.ts, WEB_PROVIDER_CDP_BIND flag default off), profile→provider matrix + cdp-bind. All 6 CDP routes LOCAL_ONLY. Remaining: live test on Reza's machine (Hard Rule #18). Feature stays PRIVATE (only tasw/hy3 commits public-safe). Prior: tasw provider PR #10174; brain-dev build on 20133.",
-  "status": "cdp_feature_complete_pending_live_test",
-  "privateNotes": ".brain/ is private equity, never pushed. Global live on 20128 (v3.8.49, root-managed) is separate and not our build. hy3 is NOT a registered provider. 'mrmroy' = store-learnings request (user)."
-}
