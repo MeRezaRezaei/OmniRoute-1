@@ -6,6 +6,7 @@ import {
   type ProviderCredentials,
 } from "./base.ts";
 import { PROVIDERS } from "../config/constants.ts";
+import { COOLDOWN_MS } from "../config/errorConfig.ts";
 import { getModelTargetFormat, PROVIDER_ID_TO_ALIAS } from "../config/providerModels.ts";
 import {
   injectReasoningContentForThinkingModel,
@@ -25,6 +26,11 @@ import {
   extractChatcmplId,
 } from "./accountRotation.ts";
 import { isNetworkRotationSharedEgressGuardEnabled } from "@/shared/utils/featureFlags";
+import {
+  buildEgressKey,
+  classifyUpstream429,
+  OpenCodePairCooldownStore,
+} from "./opencodePairCooldown.ts";
 
 /**
  * Per-account proxy configuration, persisted by NoAuthAccountCard under
@@ -279,6 +285,23 @@ export class OpencodeExecutor extends BaseExecutor {
   // TS's private-member nominal check rejects `this` there otherwise.
   nextAccountIdx = 0;
 
+  /**
+   * Per-(egress, account, model) cooldown store. The executors are process
+   * singletons, so this survives across requests: once a (proxy/IP + account +
+   * model) trio returns 429, that trio stays cooled (for the upstream's own
+   * reported duration) while the rotation tries the OTHER pairs — a different
+   * proxy for the same account, or a different account on the same proxy, or a
+   * different model on the same pair. This is what "changing the proxy does
+   * nothing" was missing: the connection-level cooldown froze everything, where
+   * this store only freezes the specific couple that actually exhausted.
+   */
+  private pairCooldown = new OpenCodePairCooldownStore();
+
+  /** Read-only test/ops accessor for the per-(egress,account,model) store. */
+  get pairCooldownState(): OpenCodePairCooldownStore {
+    return this.pairCooldown;
+  }
+
   constructor(provider: string) {
     super(provider, PROVIDERS[provider] || PROVIDERS.openai);
   }
@@ -334,6 +357,11 @@ export class OpencodeExecutor extends BaseExecutor {
 
   private markSuccess(account: OpencodeAccountState): void {
     markAccountSuccess(account);
+  }
+
+  /** Clear the per-(egress,account,model) cooldown on a successful couple. */
+  private markPairSuccess(egress: string, accountId: string, model: string): void {
+    this.pairCooldown.markSuccess(egress, accountId, model);
   }
 
   /**
@@ -558,6 +586,31 @@ export class OpencodeExecutor extends BaseExecutor {
       for (let attempt = 0; attempt < this.accounts.length + emptyRejectionBudget; attempt++) {
         const account = this.pickAccount();
         const masked = maskAccountId(account.fingerprint);
+        const egress = buildEgressKey(account.proxy);
+
+        // #pair-cooldown: skip a couple (this egress + this account + this
+        // model) that is still cooled from a prior 429 — that specific couple
+        // exhausted its quota and the upstream told us when it renews. The loop
+        // keeps going, so the NEXT couple (a different proxy / different
+        // account / different model) is tried instead of blindly re-firing the
+        // same doomed one. Two couples on the SAME egress (IP) still count as
+        // the same IP bucket, so they cool together; a couple with a different
+        // proxy/egress is tried.
+        if (this.pairCooldown.isPairCooled(egress, account.fingerprint, input.model)) {
+          const cooledUntil = this.pairCooldown.getPairCooledUntil(
+            egress,
+            account.fingerprint,
+            input.model
+          );
+          log?.info?.(
+            "OPENCODE",
+            `skipping couple ${masked}@${egress} for ${input.model} — cooled until +${Math.max(
+              Math.round((cooledUntil - Date.now()) / 1000),
+              0
+            )}s, trying next couple`
+          );
+          continue;
+        }
 
         if (sharedEgressGuardEnabled && sharedEgressDown && !account.proxy) {
           log?.warn?.(
@@ -616,18 +669,76 @@ export class OpencodeExecutor extends BaseExecutor {
             throw err;
           }
           this.markCooldown(account);
+          // #pair-cooldown: a proxied account's network failure is attributable
+          // to its own egress — cool the couple so we don't keep hammering a
+          // dead proxy for this model on this request or the next.
+          if (account.proxy) {
+            this.pairCooldown.markPair(egress, account.fingerprint, input.model, 0, "network");
+          }
           log?.warn?.(
             "OPENCODE",
             `network error on account ${masked}, rotating to next… (${reason})`
           );
           continue;
         }
+
         lastResult = result;
 
         const status = result.response.status;
         if (status === 429) {
           this.markCooldown(account);
-          log?.warn?.("OPENCODE", `Rate limited (429) on account ${masked}, rotating to next…`);
+          // #pair-cooldown: cool this couple for this model (or the whole
+          // couple when the upstream says the account/IP budget is gone),
+          // bound by the upstream's own reported duration (Retry-After /
+          // X-RateLimit-Reset / body "Resets in N …"). With a different proxy
+          // (different egress) in the fleet, this couple stays down while the
+          // others keep serving — which is precisely "changing the proxy does
+          // nothing" being fixed at the granularity that matters.
+          let bodyText = "";
+          try {
+            const cloned = result.response.clone();
+            bodyText = await cloned.text().catch(() => "");
+          } catch {
+            // non-cloneable/streaming body — fall back to headers only
+          }
+          const { cooldownMs, accountWide } = classifyUpstream429(
+            result.response.headers,
+            bodyText
+          );
+          // Default when the upstream gives no reset hint: the repo's standard
+          // rate-limit cooldown (2min). When the upstream DOES tell us (e.g.
+          // "Resets in 13 days"), honor exactly that — longer for a big reset,
+          // short for a quick retry-after.
+          const ms =
+            typeof cooldownMs === "number" && cooldownMs > 0 ? cooldownMs : COOLDOWN_MS.rateLimit;
+          if (accountWide) {
+            this.pairCooldown.markFamily(egress, account.fingerprint, ms, "429", Date.now());
+            log?.warn?.(
+              "OPENCODE",
+              `Rate limited (429, account/IP-wide) on couple ${masked}@${egress}` +
+                (cooldownMs !== null
+                  ? ` for ${Math.ceil(cooldownMs / 1000)}s`
+                  : " (default backoff)") +
+                `, rotating to next…`
+            );
+          } else {
+            this.pairCooldown.markPair(
+              egress,
+              account.fingerprint,
+              input.model,
+              ms,
+              "429",
+              Date.now()
+            );
+            log?.warn?.(
+              "OPENCODE",
+              `Rate limited (429, model-scoped) on couple ${masked}@${egress} for ${input.model}` +
+                (cooldownMs !== null
+                  ? ` for ${Math.ceil(cooldownMs / 1000)}s`
+                  : " (default backoff)") +
+                `, rotating to next…`
+            );
+          }
           continue;
         }
 
@@ -656,10 +767,12 @@ export class OpencodeExecutor extends BaseExecutor {
           // A 400 carrying a real error (or non-empty content): propagate
           // immediately, untouched — same as before this change.
           this.markSuccess(account);
+          this.markPairSuccess(egress, account.fingerprint, input.model);
           return result;
         }
 
         this.markSuccess(account);
+        this.markPairSuccess(egress, account.fingerprint, input.model);
         return this.normalizeMuseSparkResponse(input, result);
       }
 

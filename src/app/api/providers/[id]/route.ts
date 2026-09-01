@@ -23,6 +23,7 @@ import {
   isClaudeExtraUsageBlockEnabled,
 } from "@/lib/providers/claudeExtraUsage";
 import { requireManagementAuth } from "@/lib/api/requireManagementAuth";
+import { clearAccountError } from "@/sse/services/auth";
 import { isApiKeyRevealEnabled, maskStoredApiKey } from "@/lib/apiKeyExposure";
 import { cleanupProviderModelsAfterConnectionDelete } from "@/lib/db/models";
 import { canUpdateProviderApiKey } from "@/shared/providers/webSessionCredentials";
@@ -129,10 +130,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...validation.error.details.map((d) => d.field).filter(Boolean),
         ...validation.error.details.flatMap((d) => d.keys ?? []),
       ];
-      return NextResponse.json(
-        { error: { ...validation.error, rejected } },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: { ...validation.error, rejected } }, { status: 400 });
     }
     const body = validation.data;
     const {
@@ -340,6 +338,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     const updated = await updateProviderConnection(id, updateData);
+
+    // #pair-cooldown / "changing the proxy did nothing": when the operator edits
+    // an account's proxy (or toggles proxy routing), the connection's persisted
+    // egress-IP cooldown (rateLimitedUntil / testStatus unavailable / backoffLevel)
+    // belongs to the OLD egress and must not block requests egressing through the
+    // NEW proxy. Clear it so the fresh egress is immediately eligible — the in-memory
+    // per-(egress,account,model) store in the executor re-buckets automatically.
+    const proxyWiringChanged =
+      (incomingPsd !== undefined &&
+        incomingPsd !== null &&
+        typeof incomingPsd === "object" &&
+        "accountProxies" in incomingPsd) ||
+      proxyEnabled !== undefined ||
+      perKeyProxyEnabled !== undefined;
+    if (proxyWiringChanged) {
+      await clearAccountError(id, existing);
+      console.log(
+        `${existing.provider} proxy wiring changed — connection cooldown reset for ${String(id).slice(0, 8)}`
+      );
+    }
 
     // If rateLimitOverrides was included in the request, refresh the in-memory
     // rate limiter state so the change takes effect without a server restart.
