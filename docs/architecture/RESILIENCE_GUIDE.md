@@ -585,6 +585,39 @@ rate limit is the same signal as an exhausted quota. Honest limits:
   YAGNI). Measured on a real-traffic DB copy of moderate size; a
   high-throughput instance holds proportionally more rows in the same window.
 
+### Executor per-(egress, account, model) pair cooldown (opencode)
+
+The connection-level IP-family lock above and the connection cooldown live in
+the auth/account-selection layer. On top of that, the `OpencodeExecutor`
+rotation loop keeps its **own** per-(egress, account, model) cooldown store
+(`OpenCodePairCooldownStore`, `open-sse/executors/opencodePairCooldown.ts`) so
+a cooled couple is never re-fired inside a single request's rotation, nor on a
+subsequent request while its window is still active.
+
+- **Granularity**: the couple is `(egress/proxy-IP, account/fingerprint,
+  model)`. Because the opencode free tier is IP-bucketed, two couples on the
+  same egress cool together for the same model; a couple with a different
+  proxy/egress is tried next. This is what "changing the proxy does nothing"
+  was missing: the connection-level cooldown froze everything, the store only
+  freezes the specific couple that actually exhausted.
+- **Store lifetime**: the executors are process singletons, so the store
+  survives across requests. Entries expire lazily by timestamp (`isPairCooled`)
+  and are cleared by `markSuccess` on a 200.
+- **Duration**: a 429 honors the upstream's own reset hint
+  (`classifyUpstream429`: `Retry-After` / `x-ratelimit-*` headers / body
+  "Resets in N …"), falling back to `COOLDOWN_MS.rateLimit` (120s). A
+  model-scoped 429 calls `markPair`; an account/IP-wide reset (e.g.
+  `x-ratelimit-remaining-requests: 0`) calls `markFamily` and cools every
+  model on that couple.
+- **Network errors**: a proxied account's network failure (dead/unreachable
+  proxy) also marks the pair, and successes clear it.
+- **Proxy-change reset**: when the operator edits a connection's proxy wiring
+  (`accountProxies`, `proxyEnabled`, `perKeyProxyEnabled`) via the provider
+  PUT route, the connection's **persisted** egress cooldown
+  (`rateLimitedUntil` / `testStatus` / `backoffLevel`) is cleared
+  (`clearAccountError`) so the fresh egress is immediately eligible — the
+  in-memory store re-buckets automatically by the new egress key.
+
 ---
 
 ## Other Resilience Features
